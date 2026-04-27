@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>שחמט - שחקן נגד מחשב</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>♟️ שחמט ♟️</h1>
+    <div class="game-info">
+        <div class="turn-indicator white" id="turnIndicator">תור: לבן ♔</div>
+        <div class="score" id="score">נצ: 0 | הפס: 0</div>
+    </div>
+    <div class="board-wrapper">
+        <div class="board" id="board"></div>
+    </div>
+    <div class="captured-row">
+        <div class="captured-pieces" id="capturedBlack" title="שבויים לבנים"></div>
+        <div class="captured-pieces" id="capturedWhite" title="שבויים שחורים"></div>
+    </div>
+    <div class="status" id="status">המשחק התחיל! אתה משחק לבן.</div>
+    <div class="buttons">
+        <button onclick="newGame()">משחק חדש</button>
+        <button onclick="undoMove()">חזור</button>
+    </div>
+
+    <script src="chess.js"></script>
+</body>
+</html>
