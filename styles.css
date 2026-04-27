@@ -95,7 +95,7 @@ h1 {
     background: rgba(255,255,255,0.1);
     border-radius: 8px;
 }
-.buttons { margin-top: 10px; display: flex; gap: 10px; }
+.buttons { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 button {
     padding: 8px 20px;
     font-size: clamp(0.8em, 2vw, 1em);
@@ -104,6 +104,28 @@ button {
     border: none;
     border-radius: 6px;
     cursor: pointer;
+}
+.difficulty-row {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.difficulty-row label {
+    font-size: clamp(0.8em, 2vw, 1em);
+}
+.difficulty-row select {
+    padding: 6px 12px;
+    font-size: clamp(0.8em, 2vw, 1em);
+    border-radius: 6px;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    cursor: pointer;
+}
+.difficulty-row select option {
+    background: #1a1a2e;
+    color: #fff;
 }
 button:hover {
     transform: translateY(-2px);

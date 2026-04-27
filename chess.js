@@ -9,11 +9,19 @@ const pieces = {
     R: '♜', N: '♞', B: '♝', Q: '♛', K: '♚', P: '♟'
 };
 
-function getPieceStyle(piece) {
-    if (!piece) return '';
-    const isWhite = piece === piece.toUpperCase();
-    return isWhite ? 'color: #fff; text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;' : 'color: #222; text-shadow: 1px 1px 2px #fff;';
-}
+let boardState = [];
+let selectedSquare = null;
+let currentPlayer = 'white';
+let moveList = [];
+let capturedPieces = { white: [], black: [] };
+let score = { wins: 0, losses: 0 };
+let isGameOver = false;
+let lastMove = null;
+let whiteKingMoved = false;
+let blackKingMoved = false;
+let whiteRooksMoved = { left: false, right: false };
+let blackRooksMoved = { left: false, right: false };
+let difficulty = 'medium';
 
 const initialBoard = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -26,15 +34,6 @@ const initialBoard = [
     ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
 ];
 
-let boardState = [];
-let selectedSquare = null;
-let currentPlayer = 'white';
-let moveList = [];
-let capturedPieces = { white: [], black: [] };
-let score = { wins: 0, losses: 0 };
-let isGameOver = false;
-let lastMove = null;
-
 function initBoard() {
     boardState = initialBoard.map(row => [...row]);
     currentPlayer = 'white';
@@ -43,12 +42,17 @@ function initBoard() {
     capturedPieces = { white: [], black: [] };
     isGameOver = false;
     lastMove = null;
+    whiteKingMoved = false;
+    blackKingMoved = false;
+    whiteRooksMoved = { left: false, right: false };
+    blackRooksMoved = { left: false, right: false };
     renderBoard();
     updateStatus('המשחק התחיל! אתה משחק לבן.');
     turnIndicator.textContent = 'תור: לבן ♔';
     turnIndicator.className = 'turn-indicator white';
     capturedWhite.innerHTML = '';
     capturedBlack.innerHTML = '';
+    document.getElementById('difficulty').value = difficulty;
 }
 
 function renderBoard() {
@@ -95,7 +99,7 @@ function showPossibleMoves() {
         const index = move.row * 8 + move.col;
         const square = squares[index];
         square.classList.add('possible-move');
-        if (boardState[move.row][move.col]) {
+        if (boardState[move.row][move.col] || move.castle) {
             square.classList.add('possible-capture');
         }
     });
@@ -113,10 +117,14 @@ function handleSquareClick(row, col) {
 
     if (selectedSquare) {
         const moves = getLegalMoves(selectedSquare.row, selectedSquare.col);
-        const isValidMove = moves.some(m => m.row === row && m.col === col);
+        const move = moves.find(m => m.row === row && m.col === col);
 
-        if (isValidMove) {
-            makeMove(selectedSquare.row, selectedSquare.col, row, col);
+        if (move) {
+            if (move.castle) {
+                doCastle(move.side);
+            } else {
+                makeMove(selectedSquare.row, selectedSquare.col, row, col);
+            }
             selectedSquare = null;
             renderBoard();
             currentPlayer = 'black';
@@ -139,9 +147,105 @@ function handleSquareClick(row, col) {
     }
 }
 
+function canCastle(color, side) {
+    const row = color === 'white' ? 7 : 0;
+    const kingCol = 4;
+    const rookCol = side === 'left' ? 0 : 7;
+
+    if (isInCheck(color)) return false;
+
+    if (color === 'white') {
+        if (whiteKingMoved) return false;
+        if (side === 'left' && whiteRooksMoved.left) return false;
+        if (side === 'right' && whiteRooksMoved.right) return false;
+    } else {
+        if (blackKingMoved) return false;
+        if (side === 'left' && blackRooksMoved.left) return false;
+        if (side === 'right' && blackRooksMoved.right) return false;
+    }
+
+    if (boardState[row][rookCol]?.toLowerCase() !== 'r') return false;
+
+    const dir = side === 'left' ? 1 : -1;
+    const start = Math.min(kingCol, rookCol) + 1;
+    const end = Math.max(kingCol, rookCol);
+
+    for (let c = start; c < end; c++) {
+        if (boardState[row][c]) return false;
+    }
+
+    if (squareUnderAttack(row, kingCol, color)) return false;
+    if (squareUnderAttack(row, kingCol + dir, color)) return false;
+    if (squareUnderAttack(row, kingCol + dir * 2, color)) return false;
+
+    return true;
+}
+
+function squareUnderAttack(row, col, defendingColor) {
+    const enemyColor = defendingColor === 'white' ? 'black' : 'white';
+
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (getPieceColor(boardState[r][c]) === enemyColor) {
+                const attacks = getAttacks(r, c);
+                if (attacks.some(a => a.row === row && a.col === col)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+function doCastle(side) {
+    const row = 0;
+    const kingCol = 4;
+    const dir = side === 'left' ? -1 : 1;
+    const newKingCol = kingCol + dir * 2;
+    const newRookCol = side === 'left' ? 3 : 5;
+
+    boardState[row][newKingCol] = boardState[row][kingCol];
+    boardState[row][kingCol] = '';
+    boardState[row][newRookCol] = boardState[row][side === 'left' ? 0 : 7];
+    boardState[row][side === 'left' ? 0 : 7] = '';
+
+    blackKingMoved = true;
+    if (side === 'left') blackRooksMoved.left = true;
+    else blackRooksMoved.right = true;
+
+    moveList.push({ castle: true, side, color: 'black' });
+    lastMove = { from: { row, col: kingCol }, to: { row, col: newKingCol } };
+}
+
+function getCastleMoves(color) {
+    const moves = [];
+    if (canCastle(color, 'left')) {
+        moves.push({ row: color === 'white' ? 7 : 0, col: 2, castle: true, side: 'left' });
+    }
+    if (canCastle(color, 'right')) {
+        moves.push({ row: color === 'white' ? 7 : 0, col: 6, castle: true, side: 'right' });
+    }
+    return moves;
+}
+
 function makeMove(fromRow, fromCol, toRow, toCol) {
     const piece = boardState[fromRow][fromCol];
     const captured = boardState[toRow][toCol];
+
+    if (piece.toLowerCase() === 'k') {
+        if (getPieceColor(piece) === 'white') whiteKingMoved = true;
+        else blackKingMoved = true;
+    }
+    if (piece.toLowerCase() === 'r') {
+        if (fromCol === 0) {
+            if (getPieceColor(piece) === 'white') whiteRooksMoved.left = true;
+            else blackRooksMoved.left = true;
+        }
+        if (fromCol === 7) {
+            if (getPieceColor(piece) === 'white') whiteRooksMoved.right = true;
+            else blackRooksMoved.right = true;
+        }
+    }
 
     if (captured) {
         const color = getPieceColor(captured);
@@ -172,10 +276,10 @@ function makeMove(fromRow, fromCol, toRow, toCol) {
 
 function updateCapturedDisplay() {
     capturedWhite.innerHTML = capturedPieces.white.map(p =>
-        `<span style="${getPieceStyle(p)}">${pieces[p]}</span>`
+        `<span style="color:#222">${pieces[p]}</span>`
     ).join('');
     capturedBlack.innerHTML = capturedPieces.black.map(p =>
-        `<span style="${getPieceStyle(p)}">${pieces[p]}</span>`
+        `<span style="color:#fff">${pieces[p]}</span>`
     ).join('');
 }
 
@@ -203,7 +307,71 @@ function getKingPos(color) {
 function getLegalMoves(row, col) {
     const piece = boardState[row][col];
     if (!piece) return [];
-    return getPossibleMoves(row, col).filter(move => !wouldBeInCheck(row, col, move.row, move.col));
+    const color = getPieceColor(piece);
+    let moves = getPossibleMoves(row, col);
+
+    if (piece.toLowerCase() === 'k') {
+        moves = moves.concat(getCastleMoves(color));
+    }
+
+    return moves.filter(move => {
+        if (move.castle) return true;
+        return !wouldBeInCheck(row, col, move.row, move.col);
+    });
+}
+
+function getAttacks(row, col) {
+    const piece = boardState[row][col];
+    if (!piece) return [];
+    const color = getPieceColor(piece);
+    const type = piece.toLowerCase();
+    const attacks = [];
+
+    switch (type) {
+        case 'p':
+            const dir = color === 'white' ? -1 : 1;
+            for (const dc of [-1, 1]) {
+                const nc = col + dc;
+                if (nc >= 0 && nc <= 7) {
+                    attacks.push({ row: row + dir, col: nc });
+                }
+            }
+            break;
+        case 'n':
+            for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
+                const nr = row + dr, nc = col + dc;
+                if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+                    attacks.push({ row: nr, col: nc });
+                }
+            }
+            break;
+        case 'k':
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr !== 0 || dc !== 0) {
+                        const nr = row + dr, nc = col + dc;
+                        if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+                            attacks.push({ row: nr, col: nc });
+                        }
+                    }
+                }
+            }
+            break;
+        default:
+            const dirs = type === 'b' ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] :
+                type === 'r' ? [[0, 1], [0, -1], [1, 0], [-1, 0]] :
+                    [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+            for (const [dr, dc] of dirs) {
+                let nr = row + dr, nc = col + dc;
+                while (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+                    attacks.push({ row: nr, col: nc });
+                    if (boardState[nr][nc]) break;
+                    nr += dr;
+                    nc += dc;
+                }
+            }
+    }
+    return attacks;
 }
 
 function getPossibleMoves(row, col) {
@@ -317,18 +485,7 @@ function isInCheck(color = currentPlayer) {
     if (!kingPos) return false;
 
     const [kRow, kCol] = kingPos.split(',').map(Number);
-    const enemyColor = color === 'white' ? 'black' : 'white';
-
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            if (getPieceColor(boardState[r][c]) === enemyColor) {
-                if (getPossibleMoves(r, c).some(m => m.row === kRow && m.col === kCol)) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
+    return squareUnderAttack(kRow, kCol, color);
 }
 
 function isCheckmate() {
@@ -360,7 +517,21 @@ function computerMove() {
         return;
     }
 
-    makeMove(move.from.row, move.from.col, move.to.row, move.to.col);
+    if (move.castle) {
+        const row = 0;
+        const dir = move.side === 'left' ? -1 : 1;
+        boardState[row][4] = '';
+        boardState[row][move.side === 'left' ? 0 : 7] = '';
+        boardState[row][4 + dir * 2] = 'k';
+        boardState[row][4 + dir] = 'r';
+        blackKingMoved = true;
+        if (move.side === 'left') blackRooksMoved.left = true;
+        else blackRooksMoved.right = true;
+        lastMove = { from: { row, col: 4 }, to: { row, col: 4 + dir * 2 } };
+    } else {
+        makeMove(move.from.row, move.from.col, move.to.row, move.to.col);
+    }
+
     currentPlayer = 'white';
     turnIndicator.textContent = 'תור: לבן ♔';
     turnIndicator.className = 'turn-indicator white';
@@ -394,62 +565,74 @@ function findBestMove() {
 
     if (moves.length === 0) return null;
 
-    const captureMoves = moves.filter(m => boardState[m.to.row][m.to.col]);
-    const nonCaptureMoves = moves.filter(m => !boardState[m.to.row][m.to.col]);
+    const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 200 };
 
-    const shuffledCaptures = captureMoves.sort(() => Math.random() - 0.5);
-    const shuffledNonCaptures = nonCaptureMoves.sort(() => Math.random() - 0.5);
+    moves.forEach(m => {
+        m.score = 0;
+        if (m.to.row !== undefined && boardState[m.to.row]?.[m.to.col]) {
+            m.score += pieceValues[boardState[m.to.row][m.to.col].toLowerCase()] * 10;
+        }
 
-    const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
-    shuffledCaptures.sort((a, b) => {
-        const valA = pieceValues[boardState[a.to.row][a.to.col].toLowerCase()];
-        const valB = pieceValues[boardState[b.to.row][b.to.col].toLowerCase()];
-        return valB - valA;
+        const tempBoard = boardState.map(row => [...row]);
+        const piece = boardState[m.from.row]?.[m.from.col];
+        if (piece && m.to.row !== undefined) {
+            boardState[m.to.row][m.to.col] = piece;
+            boardState[m.from.row][m.from.col] = '';
+            if (isInCheck('white')) m.score += 50;
+            boardState = tempBoard;
+        }
     });
 
-    const checkMoves = moves.filter(m => {
-        const tempBoard = boardState.map(r => [...r]);
-        const piece = boardState[m.from.row][m.from.col];
-        boardState[m.to.row][m.to.col] = piece;
-        boardState[m.from.row][m.from.col] = '';
-        const inCheck = isInCheck('white');
-        boardState = tempBoard;
-        return inCheck;
-    });
-
-    if (checkMoves.length > 0 && Math.random() > 0.3) {
-        return checkMoves[Math.floor(Math.random() * checkMoves.length)];
+    if (difficulty === 'easy') {
+        return moves[Math.floor(Math.random() * moves.length)];
     }
 
-    if (shuffledCaptures.length > 0 && Math.random() > 0.5) {
-        return shuffledCaptures[0];
+    if (difficulty === 'medium') {
+        moves.sort((a, b) => b.score - a.score);
+        const bestScore = moves[0].score;
+        const bestMoves = moves.filter(m => m.score >= bestScore - 5);
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
     }
 
-    return [...shuffledCaptures, ...shuffledNonCaptures][0];
+    moves.sort((a, b) => b.score - a.score);
+    return moves[0];
+}
+
+function setDifficulty(level) {
+    difficulty = level;
 }
 
 function undoMove() {
     if (moveList.length < 2 || isGameOver) return;
 
-    const blackMove = moveList.pop();
-    const whiteMove = moveList.pop();
+    const lastMove = moveList.pop();
+    if (lastMove.castle) {
+        const row = 0;
+        const dir = lastMove.side === 'left' ? -1 : 1;
+        boardState[row][4] = 'k';
+        boardState[row][4 + dir * 2] = '';
+        boardState[row][4 + dir] = '';
+        boardState[row][lastMove.side === 'left' ? 0 : 7] = 'r';
+        blackKingMoved = false;
+        if (lastMove.side === 'left') blackRooksMoved.left = false;
+        else blackRooksMoved.right = false;
+    } else {
+        const whiteMove = moveList.pop();
+        boardState[whiteMove.from.row][whiteMove.from.col] = whiteMove.piece;
+        boardState[whiteMove.to.row][whiteMove.to.col] = whiteMove.captured || '';
+        boardState[lastMove.from.row][lastMove.from.col] = lastMove.piece;
+        boardState[lastMove.to.row][lastMove.to.col] = lastMove.captured || '';
 
-    boardState[whiteMove.from.row][whiteMove.from.col] = whiteMove.piece;
-    boardState[whiteMove.to.row][whiteMove.to.col] = whiteMove.captured || '';
-
-    boardState[blackMove.from.row][blackMove.from.col] = blackMove.piece;
-    boardState[blackMove.to.row][blackMove.to.col] = blackMove.captured || '';
-
-    if (whiteMove.captured) {
-        const color = getPieceColor(whiteMove.captured);
-        const idx = capturedPieces[color].lastIndexOf(whiteMove.captured);
-        if (idx > -1) capturedPieces[color].splice(idx, 1);
-        updateCapturedDisplay();
-    }
-    if (blackMove.captured) {
-        const color = getPieceColor(blackMove.captured);
-        const idx = capturedPieces[color].lastIndexOf(blackMove.captured);
-        if (idx > -1) capturedPieces[color].splice(idx, 1);
+        if (lastMove.captured) {
+            const color = getPieceColor(lastMove.captured);
+            const idx = capturedPieces[color].lastIndexOf(lastMove.captured);
+            if (idx > -1) capturedPieces[color].splice(idx, 1);
+        }
+        if (whiteMove.captured) {
+            const color = getPieceColor(whiteMove.captured);
+            const idx = capturedPieces[color].lastIndexOf(whiteMove.captured);
+            if (idx > -1) capturedPieces[color].splice(idx, 1);
+        }
         updateCapturedDisplay();
     }
 
@@ -458,7 +641,6 @@ function undoMove() {
     turnIndicator.className = 'turn-indicator white';
     selectedSquare = null;
     isGameOver = false;
-    lastMove = null;
     renderBoard();
     updateStatus('חזרת למצב קודם.');
 }
@@ -466,5 +648,3 @@ function undoMove() {
 function newGame() {
     initBoard();
 }
-
-initBoard();

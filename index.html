@@ -12,14 +12,20 @@
         <div class="turn-indicator white" id="turnIndicator">תור: לבן ♔</div>
         <div class="score" id="score">נצ: 0 | הפס: 0</div>
     </div>
-    <div class="board-wrapper">
-        <div class="board" id="board"></div>
-    </div>
+    <div class="board" id="board"></div>
     <div class="captured-row">
         <div class="captured-pieces" id="capturedBlack" title="שבויים לבנים"></div>
         <div class="captured-pieces" id="capturedWhite" title="שבויים שחורים"></div>
     </div>
     <div class="status" id="status">המשחק התחיל! אתה משחק לבן.</div>
+    <div class="difficulty-row">
+        <label>רמה:</label>
+        <select id="difficulty" onchange="setDifficulty(this.value)">
+            <option value="easy">קל</option>
+            <option value="medium" selected>בינוני</option>
+            <option value="hard">קשה</option>
+        </select>
+    </div>
     <div class="buttons">
         <button onclick="newGame()">משחק חדש</button>
         <button onclick="undoMove()">חזור</button>
