@@ -722,3 +722,5 @@ function undoMove() {
 function newGame() {
     initBoard();
 }
+
+document.addEventListener('DOMContentLoaded', initBoard);
