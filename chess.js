@@ -567,35 +567,109 @@ function findBestMove() {
 
     const pieceValues = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 200 };
 
+    const centerSquares = [[3,3],[3,4],[4,3],[4,4]];
+    const extendedCenter = [[2,2],[2,3],[2,4],[2,5],[3,2],[3,5],[4,2],[4,5],[5,2],[5,3],[5,4],[5,5]];
+
     moves.forEach(m => {
         m.score = 0;
-        if (m.to.row !== undefined && boardState[m.to.row]?.[m.to.col]) {
-            m.score += pieceValues[boardState[m.to.row][m.to.col].toLowerCase()] * 10;
+        
+        const piece = m.to.row !== undefined ? boardState[m.from.row]?.[m.from.col] : null;
+        const captured = m.to.row !== undefined ? boardState[m.to.row]?.[m.to.col] : null;
+        
+        if (captured) {
+            m.score += pieceValues[captured.toLowerCase()] * 100;
         }
 
-        const tempBoard = boardState.map(row => [...row]);
-        const piece = boardState[m.from.row]?.[m.from.col];
-        if (piece && m.to.row !== undefined) {
+        if (m.to.row !== undefined && m.to.col !== undefined) {
+            const toRow = m.to.row;
+            const toCol = m.to.col;
+            
+            if (centerSquares.some(s => s[0] === toRow && s[1] === toCol)) {
+                m.score += 15;
+            } else if (extendedCenter.some(s => s[0] === toRow && s[1] === toCol)) {
+                m.score += 8;
+            }
+
+            if (piece && piece.toLowerCase() === 'p') {
+                m.score += (7 - toRow) * 3;
+            }
+            if (piece && piece.toLowerCase() === 'n') {
+                if ([toRow, toCol].some(c => c >= 2 && c <= 5)) m.score += 5;
+            }
+            if (piece && piece.toLowerCase() === 'b') {
+                if ([toRow, toCol].some(c => c >= 2 && c <= 5)) m.score += 3;
+            }
+            if (piece && piece.toLowerCase() === 'r') {
+                if (toCol === 3 || toCol === 4) m.score += 5;
+            }
+
+            if (piece && piece.toLowerCase() === 'q' || piece.toLowerCase() === 'r') {
+                m.score += getAttackCount(m.to.row, m.to.col) * 2;
+            }
+        }
+
+        if (!m.castle && piece) {
+            const tempBoard = boardState.map(row => [...row]);
             boardState[m.to.row][m.to.col] = piece;
             boardState[m.from.row][m.from.col] = '';
-            if (isInCheck('white')) m.score += 50;
-            boardState = tempBoard;
+            
+            if (isInCheck('white')) m.score += 30;
+            
+            const myKingRow = 0;
+            const myKingCol = 4;
+            if (squareUnderAttack(myKingRow, myKingCol, 'black')) m.score -= 20;
+            
+            boardState.forEach((row, i) => boardState[i] = tempBoard[i]);
         }
+
+        if (m.castle) m.score += 10;
     });
 
+    moves.sort((a, b) => b.score - a.score);
+
     if (difficulty === 'easy') {
-        return moves[Math.floor(Math.random() * moves.length)];
+        const topMoves = moves.slice(0, Math.min(5, moves.length));
+        return topMoves[Math.floor(Math.random() * topMoves.length)];
     }
 
     if (difficulty === 'medium') {
-        moves.sort((a, b) => b.score - a.score);
         const bestScore = moves[0].score;
-        const bestMoves = moves.filter(m => m.score >= bestScore - 5);
-        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        const goodMoves = moves.filter(m => m.score >= bestScore - 10);
+        return goodMoves[Math.floor(Math.random() * goodMoves.length)];
     }
 
-    moves.sort((a, b) => b.score - a.score);
     return moves[0];
+}
+
+function getAttackCount(row, col) {
+    let count = 0;
+    const piece = boardState[row]?.[col];
+    if (!piece) return 0;
+    const type = piece.toLowerCase();
+    
+    const directions = {
+        r: [[0,1],[0,-1],[1,0],[-1,0]],
+        b: [[1,1],[1,-1],[-1,1],[-1,-1]],
+        q: [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]],
+        n: [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]],
+        k: [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
+    };
+    
+    if (directions[type]) {
+        for (const [dr, dc] of directions[type]) {
+            if (type === 'n' || type === 'k') {
+                const nr = row + dr, nc = col + dc;
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && boardState[nr][nc]) count++;
+            } else {
+                let nr = row + dr, nc = col + dc;
+                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                    if (boardState[nr][nc]) { count++; break; }
+                    nr += dr; nc += dc;
+                }
+            }
+        }
+    }
+    return count;
 }
 
 function setDifficulty(level) {
